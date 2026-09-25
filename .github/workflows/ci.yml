@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            name: ubuntu-22.04
+            fetch_can_utils: ON
+            generator: Ninja
+          - os: windows-2022
+            name: windows-2022
+            fetch_can_utils: OFF
+            generator: Visual Studio 17 2022
+          - os: macos-14
+            name: macos-14
+            fetch_can_utils: OFF
+            generator: Ninja
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install tools on Ubuntu
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libboost-filesystem-dev libboost-system-dev
+
+      - name: Install tools on macOS
+        if: runner.os == 'macOS'
+        run: |
+          brew reinstall boost || brew install boost
+          test -f "$(brew --prefix boost)/include/boost/process.hpp"
+
+      - name: Install tools on Windows
+        if: runner.os == 'Windows'
+        run: |
+          choco install boost-msvc-14.3 --no-progress -y
+          $boostRoot = Get-ChildItem C:\local -Directory -Filter 'boost_*' |
+            Sort-Object Name -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $boostRoot) { throw 'Chocolatey Boost installation was not found under C:\local' }
+          "BOOST_ROOT=$boostRoot" >> $env:GITHUB_ENV
+          "Boost_ROOT=$boostRoot" >> $env:GITHUB_ENV
+          $boostLibrary = Get-ChildItem $boostRoot -Recurse -Filter 'libboost_filesystem*.lib' |
+            Select-Object -First 1
+          if (-not $boostLibrary) { throw "Boost filesystem library was not found under: $boostRoot" }
+          $boostLibraryDir = $boostLibrary.DirectoryName
+          "BOOST_LIBRARYDIR=$($boostLibraryDir -replace '\\','/')" >> $env:GITHUB_ENV
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned clang-format
+        run: python -m pip install clang-format==18.1.8
+
+      - name: Configure
+        shell: bash
+        run: >-
+          cmake -S . -B build -G "${{ matrix.generator }}"
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTING=ON
+          -DBOOST_LIBRARYDIR="$BOOST_LIBRARYDIR"
+          -DRAUCH_FETCH_CAN_UTILS=${{ matrix.fetch_can_utils }}
+
+      - name: Check clang-format
+        shell: bash
+        run: ./scripts/clang-format.sh --dry-run
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Package artifact
+        shell: bash
+        run: |
+          mkdir -p artifact
+          if [[ -f build/rauch-fertilizer-server || -f build/rauch-fertilizer-server.exe ]]; then cp build/rauch-fertilizer-server* artifact/; elif [[ -f build/Release/rauch-fertilizer-server.exe ]]; then cp build/Release/rauch-fertilizer-server.exe artifact/; else exit 1; fi
+          cp README.md artifact/
+          if [[ -f build/isobusfs-srv || -f build/isobusfs-srv.exe ]]; then cp build/isobusfs-srv* artifact/; elif [[ -f build/_deps/can_utils-build/isobusfs-srv ]]; then cp build/_deps/can_utils-build/isobusfs-srv artifact/; fi
+          tar -czf rauch-fertilizer-server-${{ matrix.name }}.tar.gz -C artifact .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rauch-fertilizer-server-${{ matrix.name }}
+          path: rauch-fertilizer-server-${{ matrix.name }}.tar.gz

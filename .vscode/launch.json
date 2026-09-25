@@ -1,0 +1,56 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Ubuntu: vcan0 test",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build-ubuntu/rauch-fertilizer-server",
+      "args": ["--port", "8172", "--output-dir", "/tmp/rauch-fs", "--can-interface", "vcan0", "--j1939-address", "80", "--isobusfs-executable", "${workspaceFolder}/build-ubuntu/_deps/can_utils-build/isobusfs-srv"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "preLaunchTask": "Ubuntu: prepare vcan0 and build",
+      "setupCommands": [
+        { "description": "Enable pretty printing", "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ]
+    },
+    {
+      "name": "Ubuntu: can0",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/rauch-fertilizer-server",
+      "args": ["--port", "8172", "--output-dir", "/tmp/rauch-fs", "--can-interface", "can0", "--j1939-address", "f8", "--no-isobusfs"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "preLaunchTask": "Ubuntu: build"
+    },
+    {
+      "name": "Windows: PCAN",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/Release/rauch-fertilizer-server.exe",
+      "args": ["--port", "8172", "--output-dir", "C:/rauch-fs", "--can-interface", "PCAN_USBBUS1", "--j1939-address", "f8", "--no-isobusfs"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "externalConsole": true,
+      "preLaunchTask": "Windows: build"
+    },
+    {
+      "name": "Tests",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/tests/rauch_tests",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "preLaunchTask": "Ubuntu: build"
+    }
+  ]
+}

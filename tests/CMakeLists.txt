@@ -1,0 +1,20 @@
+include(FetchContent)
+FetchContent_Declare(googletest URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+add_executable(rauch_process_test_child process_test_child.cpp)
+add_executable(rauch_tcp_server_signal_test_child tcp_server_signal_test_child.cpp)
+target_link_libraries(rauch_tcp_server_signal_test_child PRIVATE rauch-core)
+set(RAUCH_TEST_SOURCES xf1_test.cpp store_test.cpp cli_options_test.cpp can_transport_test.cpp tcp_server_test.cpp isobusfs_process_test.cpp wifi_interface_test.cpp)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  list(APPEND RAUCH_TEST_SOURCES socketcan_transport_test.cpp)
+endif()
+add_executable(rauch_tests ${RAUCH_TEST_SOURCES})
+target_link_libraries(rauch_tests PRIVATE rauch-core GTest::gtest_main)
+add_dependencies(rauch_tests rauch_process_test_child rauch_tcp_server_signal_test_child)
+target_compile_definitions(rauch_tests PRIVATE
+  RAUCH_TEST_PROCESS_PATH=\"$<TARGET_FILE:rauch_process_test_child>\"
+  RAUCH_TEST_TCP_SIGNAL_PROCESS_PATH=\"$<TARGET_FILE:rauch_tcp_server_signal_test_child>\"
+)
+include(GoogleTest)
+gtest_discover_tests(rauch_tests)

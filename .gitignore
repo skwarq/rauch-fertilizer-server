@@ -1,0 +1,38 @@
+# CMake build trees
+/build*/
+/cmake-build*/
+/CMakeFiles/
+/CMakeCache.txt
+/cmake_install.cmake
+/Makefile
+/build.ninja
+/compile_commands.json
+
+# Generated binaries and libraries
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dll
+*.dylib
+*.exe
+
+# Test, coverage, and runtime output
+/Testing/
+/coverage/
+*.log
+
+# IDE-local files; retain shared VS Code launch/tasks configs
+/.vscode/*
+!/.vscode/launch.json
+!/.vscode/tasks.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OS metadata
+.DS_Store
+Thumbs.db

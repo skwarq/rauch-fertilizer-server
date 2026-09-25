@@ -1,0 +1,66 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Ubuntu: prepare vcan0 and build",
+      "type": "shell",
+      "command": "if ip link show vcan0 >/dev/null 2>&1; then ip link set vcan0 up 2>/dev/null || true; else sudo modprobe vcan && sudo ip link add dev vcan0 type vcan && sudo ip link set vcan0 up; fi && cmake -S . -B build-ubuntu -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DRAUCH_FETCH_CAN_UTILS=ON && cmake --build build-ubuntu --parallel",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+    {
+      "label": "Ubuntu: build",
+      "type": "shell",
+      "command": "cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DRAUCH_FETCH_CAN_UTILS=OFF && cmake --build build --parallel",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+    {
+      "label": "Windows: build",
+      "type": "shell",
+      "command": "cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DRAUCH_FETCH_CAN_UTILS=OFF -DRAUCH_ENABLE_PCAN=ON -DPCAN_BASIC_ROOT=\"C:/Program Files/PEAK-System/PCAN-Basic\" && cmake --build build --config Debug --parallel",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [
+        "$msCompile"
+      ]
+    },
+    {
+      "label": "Tests: ctest",
+      "type": "shell",
+      "command": "ctest --test-dir build --output-on-failure",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Ubuntu: add RAUCH IP alias",
+      "type": "shell",
+      "command": "IFACE=${RAUCH_NET_IFACE:-eth0}; ip -4 addr show dev \"$IFACE\" | grep -q \"152.21.0.31/\" || sudo ip addr add 152.21.0.31/32 dev \"$IFACE\"",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Ubuntu: remove RAUCH IP alias",
+      "type": "shell",
+      "command": "IFACE=${RAUCH_NET_IFACE:-eth0}; ip -4 addr show dev \"$IFACE\" | grep -q \"152.21.0.31/\" && sudo ip addr del 152.21.0.31/32 dev \"$IFACE\" || true",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

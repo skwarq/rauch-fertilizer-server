@@ -1,0 +1,115 @@
+cmake_minimum_required(VERSION 3.16)
+project(rauch_fertilizer_server LANGUAGES CXX)
+find_package(Boost 1.70 REQUIRED COMPONENTS filesystem system)
+
+set(RAUCH_FETCH_CAN_UTILS_DEFAULT OFF)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(RAUCH_FETCH_CAN_UTILS_DEFAULT ON)
+endif()
+option(RAUCH_FETCH_CAN_UTILS "Fetch and build ISO11783-13 File Server from can-utils" ${RAUCH_FETCH_CAN_UTILS_DEFAULT})
+if(RAUCH_FETCH_CAN_UTILS AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  message(FATAL_ERROR "linux-can/can-utils is Linux-only; disable RAUCH_FETCH_CAN_UTILS on this platform")
+endif()
+option(RAUCH_ENABLE_PCAN "Enable PEAK PCAN-Basic backend" OFF)
+set(PCAN_BASIC_ROOT "" CACHE PATH "PCAN-Basic SDK root directory")
+if(RAUCH_FETCH_CAN_UTILS)
+  include(FetchContent)
+  set(ENABLE_BASIC_TOOLS OFF CACHE BOOL "" FORCE)
+  set(ENABLE_IP_SERVER OFF CACHE BOOL "" FORCE)
+  set(ENABLE_GATEWAY OFF CACHE BOOL "" FORCE)
+  set(ENABLE_MEASUREMENT OFF CACHE BOOL "" FORCE)
+  set(ENABLE_ISOTP OFF CACHE BOOL "" FORCE)
+  set(ENABLE_LOG_FILE OFF CACHE BOOL "" FORCE)
+  set(ENABLE_SLCAN OFF CACHE BOOL "" FORCE)
+  set(ENABLE_MCP251XFD OFF CACHE BOOL "" FORCE)
+  set(ENABLE_J1939 ON CACHE BOOL "" FORCE)
+  set(ENABLE_ISOBUSFS ON CACHE BOOL "" FORCE)
+  FetchContent_Declare(can_utils
+    GIT_REPOSITORY https://github.com/linux-can/can-utils.git
+    GIT_TAG v2025.01
+    GIT_SHALLOW TRUE
+  )
+  FetchContent_MakeAvailable(can_utils)
+endif()
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+option(RAUCH_ENABLE_CLANG_TIDY "Enable clang-tidy" OFF)
+option(RAUCH_WARNINGS_AS_ERRORS "Treat warnings as errors" ON)
+add_library(rauch-core
+  app/xf1.cpp
+  app/xf1_store.cpp
+  app/can_transport.cpp
+  app/cli_options.cpp
+  app/wifi_interface.cpp
+  app/tcp_server_boost.cpp
+  app/isobusfs_process.cpp
+)
+if(WIN32)
+  target_compile_definitions(rauch-core PUBLIC _WIN32_WINNT=0x0601)
+endif()
+if(WIN32)
+  target_sources(rauch-core PRIVATE platform/windows/hotspot.cpp platform/windows/process_shutdown.cpp
+    platform/windows/process_launcher.cpp platform/windows/atomic_file.cpp)
+  target_link_libraries(rauch-core PRIVATE ws2_32 wlanapi iphlpapi)
+  if(RAUCH_ENABLE_PCAN)
+    find_path(PCAN_INCLUDE_DIR PCANBasic.h PATHS "${PCAN_BASIC_ROOT}/Include" "${PCAN_BASIC_ROOT}/include" REQUIRED)
+    find_library(PCAN_LIBRARY NAMES PCANBasic PATHS "${PCAN_BASIC_ROOT}/x64" "${PCAN_BASIC_ROOT}/lib" REQUIRED)
+    target_include_directories(rauch-core PRIVATE "${PCAN_INCLUDE_DIR}")
+    target_link_libraries(rauch-core PRIVATE "${PCAN_LIBRARY}")
+    target_sources(rauch-core PRIVATE platform/windows/pcan_transport.cpp platform/windows/can_transport_pcan_factory.cpp)
+  else()
+    target_sources(rauch-core PRIVATE platform/windows/can_transport_factory.cpp)
+  endif()
+else()
+  if(APPLE)
+    target_sources(rauch-core PRIVATE platform/macos/hotspot.cpp platform/macos/can_transport_factory.cpp
+      platform/unix/pcan_transport_unavailable.cpp platform/unix/process_shutdown.cpp
+      platform/unix/process_launcher.cpp platform/macos/atomic_file.cpp)
+  else()
+    target_sources(rauch-core PRIVATE platform/unix/hotspot.cpp platform/unix/can_transport_factory.cpp
+      platform/unix/socketcan_transport.cpp platform/unix/pcan_transport_unavailable.cpp
+      platform/unix/process_shutdown.cpp platform/unix/process_launcher.cpp platform/unix/atomic_file.cpp)
+  endif()
+  if(RAUCH_ENABLE_PCAN)
+    message(FATAL_ERROR "RAUCH_ENABLE_PCAN is supported only on Windows")
+  endif()
+endif()
+target_include_directories(rauch-core PUBLIC app)
+target_link_libraries(rauch-core PUBLIC Boost::filesystem Boost::system)
+add_executable(rauch-fertilizer-server app/main.cpp)
+target_link_libraries(rauch-fertilizer-server PRIVATE rauch-core)
+if(WIN32)
+  target_compile_definitions(rauch-fertilizer-server PRIVATE _WIN32_WINNT=0x0601)
+endif()
+if(RAUCH_FETCH_CAN_UTILS)
+  add_dependencies(rauch-fertilizer-server isobusfs-srv)
+  add_custom_command(TARGET rauch-fertilizer-server POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      $<TARGET_FILE:isobusfs-srv>
+      $<TARGET_FILE_DIR:rauch-fertilizer-server>
+  )
+endif()
+include(CTest)
+if(RAUCH_WARNINGS_AS_ERRORS)
+  if(MSVC)
+    target_compile_options(rauch-core PRIVATE /W4 /WX)
+    target_compile_options(rauch-fertilizer-server PRIVATE /W4 /WX)
+  else()
+    target_compile_options(rauch-core PRIVATE -Werror)
+    target_compile_options(rauch-fertilizer-server PRIVATE -Werror)
+  endif()
+endif()
+if(RAUCH_ENABLE_CLANG_TIDY)
+  set_target_properties(rauch-core rauch-fertilizer-server PROPERTIES CXX_CLANG_TIDY "clang-tidy")
+endif()
+if(BUILD_TESTING)
+  add_subdirectory(tests)
+endif()
+if(MSVC)
+  target_compile_options(rauch-core PRIVATE /W4)
+  target_compile_options(rauch-fertilizer-server PRIVATE /W4)
+else()
+  target_compile_options(rauch-core PRIVATE -Wall -Wextra -Wpedantic)
+  target_compile_options(rauch-fertilizer-server PRIVATE -Wall -Wextra -Wpedantic)
+endif()
